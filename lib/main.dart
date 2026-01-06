@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -113,6 +114,46 @@ class Transaction {
         amount: (json['amount']).toDouble(),
         date: DateTime.parse(json['date']),
         type: TransactionType.values.byName(json['type']),
+      );
+}
+
+class UserProfile {
+  final String id;
+  final String name;
+  final String avatarIcon; // Material icon name
+  final Color avatarColor;
+  final int level;
+  final DateTime createdAt;
+  DateTime lastActiveAt;
+
+  UserProfile({
+    required this.id,
+    required this.name,
+    required this.avatarIcon,
+    required this.avatarColor,
+    this.level = 1,
+    required this.createdAt,
+    required this.lastActiveAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'avatarIcon': avatarIcon,
+        'avatarColor': avatarColor.value,
+        'level': level,
+        'createdAt': createdAt.toIso8601String(),
+        'lastActiveAt': lastActiveAt.toIso8601String(),
+      };
+
+  factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
+        id: json['id'],
+        name: json['name'],
+        avatarIcon: json['avatarIcon'] ?? 'person',
+        avatarColor: Color(json['avatarColor'] ?? 0xFF4CAF50),
+        level: json['level'] ?? 1,
+        createdAt: DateTime.parse(json['createdAt']),
+        lastActiveAt: DateTime.parse(json['lastActiveAt']),
       );
 }
 
@@ -342,67 +383,120 @@ class Icon3D extends StatelessWidget {
 // ============================================================================
 
 class StorageService {
-  static const String _workTasksKey = 'work_tasks';
-  static const String _rewardTasksKey = 'reward_tasks';
-  static const String _transactionsKey = 'transactions';
-  static const String _balanceKey = 'coin_balance';
-
+  static const String _profilesKey = 'user_profiles';
+  static const String _currentUserIdKey = 'current_user_id';
+  
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
-  // Work Tasks
-  Future<List<WorkTask>> loadWorkTasks() async {
+  // User Profile Management
+  Future<List<UserProfile>> loadProfiles() async {
     final prefs = await _prefs;
-    final data = prefs.getString(_workTasksKey);
+    final data = prefs.getString(_profilesKey);
+    if (data == null) return [];
+    final List<dynamic> jsonList = jsonDecode(data);
+    return jsonList.map((e) => UserProfile.fromJson(e)).toList();
+  }
+
+  Future<void> saveProfiles(List<UserProfile> profiles) async {
+    final prefs = await _prefs;
+    final data = jsonEncode(profiles.map((e) => e.toJson()).toList());
+    await prefs.setString(_profilesKey, data);
+  }
+
+  Future<String?> getCurrentUserId() async {
+    final prefs = await _prefs;
+    return prefs.getString(_currentUserIdKey);
+  }
+
+  Future<void> setCurrentUserId(String userId) async {
+    final prefs = await _prefs;
+    await prefs.setString(_currentUserIdKey, userId);
+  }
+
+  Future<void> clearCurrentUserId() async {
+    final prefs = await _prefs;
+    await prefs.remove(_currentUserIdKey);
+  }
+
+  // Helper to get user-specific key
+  String _getUserKey(String userId, String key) => 'user_${userId}_$key';
+
+  // Work Tasks (user-specific)
+  Future<List<WorkTask>> loadWorkTasks(String userId) async {
+    final prefs = await _prefs;
+    final key = _getUserKey(userId, 'work_tasks');
+    final data = prefs.getString(key);
     if (data == null) return [];
     final List<dynamic> jsonList = jsonDecode(data);
     return jsonList.map((e) => WorkTask.fromJson(e)).toList();
   }
 
-  Future<void> saveWorkTasks(List<WorkTask> tasks) async {
+  Future<void> saveWorkTasks(String userId, List<WorkTask> tasks) async {
     final prefs = await _prefs;
+    final key = _getUserKey(userId, 'work_tasks');
     final data = jsonEncode(tasks.map((e) => e.toJson()).toList());
-    await prefs.setString(_workTasksKey, data);
+    await prefs.setString(key, data);
   }
 
-  // Reward Tasks
-  Future<List<RewardTask>> loadRewardTasks() async {
+  // Reward Tasks (user-specific)
+  Future<List<RewardTask>> loadRewardTasks(String userId) async {
     final prefs = await _prefs;
-    final data = prefs.getString(_rewardTasksKey);
+    final key = _getUserKey(userId, 'reward_tasks');
+    final data = prefs.getString(key);
     if (data == null) return [];
     final List<dynamic> jsonList = jsonDecode(data);
     return jsonList.map((e) => RewardTask.fromJson(e)).toList();
   }
 
-  Future<void> saveRewardTasks(List<RewardTask> tasks) async {
+  Future<void> saveRewardTasks(String userId, List<RewardTask> tasks) async {
     final prefs = await _prefs;
+    final key = _getUserKey(userId, 'reward_tasks');
     final data = jsonEncode(tasks.map((e) => e.toJson()).toList());
-    await prefs.setString(_rewardTasksKey, data);
+    await prefs.setString(key, data);
   }
 
-  // Transactions
-  Future<List<Transaction>> loadTransactions() async {
+  // Transactions (user-specific)
+  Future<List<Transaction>> loadTransactions(String userId) async {
     final prefs = await _prefs;
-    final data = prefs.getString(_transactionsKey);
+    final key = _getUserKey(userId, 'transactions');
+    final data = prefs.getString(key);
     if (data == null) return [];
     final List<dynamic> jsonList = jsonDecode(data);
     return jsonList.map((e) => Transaction.fromJson(e)).toList();
   }
 
-  Future<void> saveTransactions(List<Transaction> transactions) async {
+  Future<void> saveTransactions(String userId, List<Transaction> transactions) async {
     final prefs = await _prefs;
+    final key = _getUserKey(userId, 'transactions');
     final data = jsonEncode(transactions.map((e) => e.toJson()).toList());
-    await prefs.setString(_transactionsKey, data);
+    await prefs.setString(key, data);
   }
 
-  // Balance
-  Future<double> loadBalance() async {
+  // Balance (user-specific)
+  Future<double> loadBalance(String userId) async {
     final prefs = await _prefs;
-    return prefs.getDouble(_balanceKey) ?? 0.0;
+    final key = _getUserKey(userId, 'coin_balance');
+    return prefs.getDouble(key) ?? 0.0;
   }
 
-  Future<void> saveBalance(double balance) async {
+  Future<void> saveBalance(String userId, double balance) async {
     final prefs = await _prefs;
-    await prefs.setDouble(_balanceKey, balance);
+    final key = _getUserKey(userId, 'coin_balance');
+    await prefs.setDouble(key, balance);
+  }
+
+  // Delete all user data
+  Future<void> deleteUserData(String userId) async {
+    final prefs = await _prefs;
+    final keys = [
+      _getUserKey(userId, 'work_tasks'),
+      _getUserKey(userId, 'reward_tasks'),
+      _getUserKey(userId, 'transactions'),
+      _getUserKey(userId, 'coin_balance'),
+    ];
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 }
 
@@ -414,6 +508,11 @@ class AppProvider extends ChangeNotifier {
   final StorageService _storage = StorageService();
   final Uuid _uuid = const Uuid();
 
+  // User Profile Data
+  List<UserProfile> _profiles = [];
+  String? _currentUserId;
+  
+  // Current User's Data
   List<WorkTask> _workTasks = [];
   List<RewardTask> _rewardTasks = [];
   List<Transaction> _transactions = [];
@@ -422,6 +521,13 @@ class AppProvider extends ChangeNotifier {
 
   Timer? _timer;
 
+  // Getters
+  List<UserProfile> get profiles => _profiles;
+  String? get currentUserId => _currentUserId;
+  UserProfile? get currentProfile => _currentUserId != null
+      ? _profiles.firstWhere((p) => p.id == _currentUserId, orElse: () => _profiles.first)
+      : null;
+  
   List<WorkTask> get workTasks => _workTasks;
   List<RewardTask> get rewardTasks => _rewardTasks;
   List<Transaction> get transactions => _transactions;
@@ -429,7 +535,25 @@ class AppProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   AppProvider() {
-    _loadData();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadProfiles();
+    final savedUserId = await _storage.getCurrentUserId();
+    if (savedUserId != null && _profiles.any((p) => p.id == savedUserId)) {
+      _currentUserId = savedUserId;
+      await _storage.setCurrentUserId(savedUserId);
+      final profile = _profiles.firstWhere((p) => p.id == savedUserId);
+      profile.lastActiveAt = DateTime.now();
+      await _storage.saveProfiles(_profiles);
+      await _loadUserData(savedUserId, isAppRestart: true);  // Stop running tasks on app restart
+      _isLoading = false;
+      notifyListeners();
+    } else {
+      _isLoading = false;
+      notifyListeners();
+    }
     _startTimer();
   }
 
@@ -448,27 +572,110 @@ class AppProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    _workTasks = await _storage.loadWorkTasks();
-    _rewardTasks = await _storage.loadRewardTasks();
-    _transactions = await _storage.loadTransactions();
-    _coinBalance = await _storage.loadBalance();
+  // Profile Management
+  Future<void> _loadProfiles() async {
+    _profiles = await _storage.loadProfiles();
+    notifyListeners();
+  }
 
-    // Reset running tasks on app restart
-    for (var task in _workTasks) {
-      if (task.isRunning) {
-        task.isRunning = false;
-        task.startTime = null;
-      }
+  Future<UserProfile> addProfile({
+    required String name,
+    required String avatarIcon,
+    required Color avatarColor,
+  }) async {
+    final profile = UserProfile(
+      id: _uuid.v4(),
+      name: name,
+      avatarIcon: avatarIcon,
+      avatarColor: avatarColor,
+      level: 1,
+      createdAt: DateTime.now(),
+      lastActiveAt: DateTime.now(),
+    );
+    _profiles.add(profile);
+    await _storage.saveProfiles(_profiles);
+    notifyListeners();
+    return profile;
+  }
+
+  Future<void> updateProfile(UserProfile profile) async {
+    final index = _profiles.indexWhere((p) => p.id == profile.id);
+    if (index != -1) {
+      _profiles[index] = profile;
+      await _storage.saveProfiles(_profiles);
+      notifyListeners();
     }
-    await _storage.saveWorkTasks(_workTasks);
+  }
 
+  Future<void> deleteProfile(String userId) async {
+    _profiles.removeWhere((p) => p.id == userId);
+    await _storage.saveProfiles(_profiles);
+    await _storage.deleteUserData(userId);
+    
+    if (_currentUserId == userId) {
+      _currentUserId = null;
+      _workTasks = [];
+      _rewardTasks = [];
+      _transactions = [];
+      _coinBalance = 0.0;
+      await _storage.clearCurrentUserId();
+    }
+    
+    notifyListeners();
+  }
+
+  Future<void> switchUser(String userId) async {
+    if (_currentUserId == userId) return;
+    
+    _isLoading = true;
+    notifyListeners();
+
+    _currentUserId = userId;
+    await _storage.setCurrentUserId(userId);
+    
+    // Update last active time
+    final profile = _profiles.firstWhere((p) => p.id == userId);
+    profile.lastActiveAt = DateTime.now();
+    await _storage.saveProfiles(_profiles);
+
+    await _loadUserData(userId);
+    
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> _loadUserData(String userId, {bool isAppRestart = false}) async {
+    _workTasks = await _storage.loadWorkTasks(userId);
+    _rewardTasks = await _storage.loadRewardTasks(userId);
+    _transactions = await _storage.loadTransactions(userId);
+    _coinBalance = await _storage.loadBalance(userId);
+
+    // Only reset running tasks on app restart, NOT on user switch
+    if (isAppRestart) {
+      for (var task in _workTasks) {
+        if (task.isRunning) {
+          task.isRunning = false;
+          task.startTime = null;
+        }
+      }
+      await _storage.saveWorkTasks(userId, _workTasks);
+    }
+  }
+
+  Future<void> logout() async {
+    _currentUserId = null;
+    _workTasks = [];
+    _rewardTasks = [];
+    _transactions = [];
+    _coinBalance = 0.0;
+    await _storage.clearCurrentUserId();
     notifyListeners();
   }
 
   // Work Task Methods
   Future<void> addWorkTask(String name, double coinsPerMinute) async {
+    if (_currentUserId == null) return;
+    
     final task = WorkTask(
       id: _uuid.v4(),
       name: name,
@@ -476,35 +683,42 @@ class AppProvider extends ChangeNotifier {
       coinsPerMinute: coinsPerMinute,
     );
     _workTasks.add(task);
-    await _storage.saveWorkTasks(_workTasks);
+    await _storage.saveWorkTasks(_currentUserId!, _workTasks);
     notifyListeners();
   }
 
   Future<void> deleteWorkTask(String id) async {
+    if (_currentUserId == null) return;
+    
     _workTasks.removeWhere((t) => t.id == id);
-    await _storage.saveWorkTasks(_workTasks);
+    await _storage.saveWorkTasks(_currentUserId!, _workTasks);
     notifyListeners();
   }
 
-  // Süreyi sıfırla
   Future<void> resetWorkTask(String id) async {
+    if (_currentUserId == null) return;
+    
     final task = _workTasks.firstWhere((t) => t.id == id);
     task.totalSeconds = 0;
     task.isRunning = false;
     task.startTime = null;
-    await _storage.saveWorkTasks(_workTasks);
+    await _storage.saveWorkTasks(_currentUserId!, _workTasks);
     notifyListeners();
   }
 
   Future<void> startWorkTask(String id) async {
+    if (_currentUserId == null) return;
+    
     final task = _workTasks.firstWhere((t) => t.id == id);
     task.isRunning = true;
     task.startTime = DateTime.now();
-    await _storage.saveWorkTasks(_workTasks);
+    await _storage.saveWorkTasks(_currentUserId!, _workTasks);
     notifyListeners();
   }
 
   Future<double> stopWorkTask(String id) async {
+    if (_currentUserId == null) return 0.0;
+    
     final task = _workTasks.firstWhere((t) => t.id == id);
     if (!task.isRunning || task.startTime == null) return 0.0;
 
@@ -513,7 +727,6 @@ class AppProvider extends ChangeNotifier {
     task.isRunning = false;
     task.startTime = null;
 
-    // Hassas coin hesaplama: dakikada başına coin * (saniye / 60)
     double earnedCoins = task.coinsPerMinute * (elapsed / 60.0);
 
     if (earnedCoins > 0) {
@@ -528,11 +741,11 @@ class AppProvider extends ChangeNotifier {
           type: TransactionType.earning,
         ),
       );
-      await _storage.saveTransactions(_transactions);
-      await _storage.saveBalance(_coinBalance);
+      await _storage.saveTransactions(_currentUserId!, _transactions);
+      await _storage.saveBalance(_currentUserId!, _coinBalance);
     }
 
-    await _storage.saveWorkTasks(_workTasks);
+    await _storage.saveWorkTasks(_currentUserId!, _workTasks);
     notifyListeners();
     return earnedCoins;
   }
@@ -557,6 +770,8 @@ class AppProvider extends ChangeNotifier {
 
   // Reward Task Methods
   Future<void> addRewardTask(String name, double cost) async {
+    if (_currentUserId == null) return;
+    
     final task = RewardTask(
       id: _uuid.v4(),
       name: name,
@@ -564,17 +779,21 @@ class AppProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     _rewardTasks.add(task);
-    await _storage.saveRewardTasks(_rewardTasks);
+    await _storage.saveRewardTasks(_currentUserId!, _rewardTasks);
     notifyListeners();
   }
 
   Future<void> deleteRewardTask(String id) async {
+    if (_currentUserId == null) return;
+    
     _rewardTasks.removeWhere((t) => t.id == id);
-    await _storage.saveRewardTasks(_rewardTasks);
+    await _storage.saveRewardTasks(_currentUserId!, _rewardTasks);
     notifyListeners();
   }
 
   Future<bool> purchaseReward(String id) async {
+    if (_currentUserId == null) return false;
+    
     final task = _rewardTasks.firstWhere((t) => t.id == id);
     if (_coinBalance < task.coinCost) {
       return false;
@@ -592,8 +811,8 @@ class AppProvider extends ChangeNotifier {
       ),
     );
 
-    await _storage.saveTransactions(_transactions);
-    await _storage.saveBalance(_coinBalance);
+    await _storage.saveTransactions(_currentUserId!, _transactions);
+    await _storage.saveBalance(_currentUserId!, _coinBalance);
     notifyListeners();
     return true;
   }
@@ -669,7 +888,7 @@ class MyApp extends StatelessWidget {
         Locale('tr', 'TR'),
       ],
       locale: const Locale('tr', 'TR'),
-      home: const WelcomeScreen(),
+      home: const ProfileSelectionScreen(),
     );
   }
 }
@@ -902,9 +1121,10 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
-    EarningPage(),
-    MarketPage(),
-    WalletPage(),
+    EarningPage(),       // Index 0: Focus
+    MarketPage(),        // Index 1: Market (center button)
+    WalletPage(),        // Index 2: Cüzdan
+    SettingsPage(),      // Index 3: Settings
   ];
 
   @override
@@ -920,89 +1140,209 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF18181B),
+        elevation: 0,
+        title: Row(
+          children: [
+            const Icon(Icons.access_time_filled, color: Color(0xFF25F425), size: 24),
+            const SizedBox(width: 12),
+            const Text(
+              'Time Mint',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // Profile Switcher Button
+          if (provider.currentProfile != null)
+            InkWell(
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF27272A),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: provider.currentProfile!.avatarColor.withAlpha(100),
+                    width: 2,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF18181B),
+                        border: Border.all(
+                          color: provider.currentProfile!.avatarColor.withAlpha(128),
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        _getIconData(provider.currentProfile!.avatarIcon),
+                        size: 18,
+                        color: provider.currentProfile!.avatarColor,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          provider.currentProfile!.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'Lvl ${provider.currentProfile!.level}',
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(128),
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.swap_horiz,
+                      color: Colors.white.withAlpha(128),
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
       ),
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white.withAlpha(15),
-              Colors.white.withAlpha(8),
-            ],
+          color: const Color(0xFF18181B).withAlpha(230),
+          border: Border(
+            top: BorderSide(color: Colors.white.withAlpha(13), width: 1),
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withAlpha(20)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF6B4EE6).withAlpha(30),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
-          ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.timer_outlined, Icons.timer, 'Görevler'),
-            _buildNavItem(1, Icons.storefront_outlined, Icons.storefront, 'Mağaza'),
-            _buildNavItem(2, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Cüzdan'),
-          ],
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              height: 70,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, Icons.timer, 'Focus'),
+                  _buildNavItem(2, Icons.account_balance_wallet, 'Cüzdan'),
+                  // Elevated center button
+                  Transform.translate(
+                    offset: const Offset(0, -20),
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFfb923c), Color(0xFFf97316)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFfb923c).withAlpha(100),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => setState(() => _currentIndex = 1),
+                          borderRadius: BorderRadius.circular(28),
+                          child: const Icon(
+                            Icons.shopping_cart,
+                            color: Colors.black,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  _buildNavItem(1, Icons.storefront, 'Market'),
+                  _buildNavItem(3, Icons.settings, 'Settings'),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, IconData selectedIcon, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: [
-                    const Color(0xFF6B4EE6).withAlpha(80),
-                    const Color(0xFF6B4EE6).withAlpha(40),
-                  ],
-                )
-              : null,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF6B4EE6).withAlpha(100),
-                    blurRadius: 15,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : [],
-        ),
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _currentIndex = index),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isSelected ? selectedIcon : icon,
-              color: isSelected ? const Color(0xFFFFD700) : Colors.grey[500],
-              size: 26,
+              icon,
+              color: isSelected ? Colors.white : Colors.grey[600],
+              size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? const Color(0xFFFFD700) : Colors.grey[500],
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.white : Colors.grey[600],
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'person': return Icons.person;
+      case 'face': return Icons.face;
+      case 'face_3': return Icons.face_3;
+      case 'work': return Icons.work;
+      case 'school': return Icons.school;
+      case 'sports_esports': return Icons.sports_esports;
+      case 'palette': return Icons.palette;
+      case 'code': return Icons.code;
+      default: return Icons.person;
+    }
   }
 }
 
@@ -1330,7 +1670,10 @@ class EarningPage extends StatelessWidget {
                                 children: [
                                   const Icon(Icons.monetization_on, color: Color(0xFF25F425)),
                                   const SizedBox(width: 8),
-                                  Text('+${earned.toStringAsFixed(2)} Coin kazandın! 🎉'),
+                                  Text(
+                                    '+${earned.toStringAsFixed(2)} Coin kazandın! 🎉',
+                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                                  ),
                                 ],
                               ),
                               backgroundColor: const Color(0xFF27272A),
@@ -1674,74 +2017,58 @@ class MarketPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Header with SPEND MODE subtitle and Rewards Shop title
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF18181B),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.05),
-                    width: 1,
-                  ),
-                ),
-              ),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Market',
+                      Text(
+                        'SPEND MODE',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey[600],
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Rewards Shop',
+                        style: TextStyle(
+                          fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                           letterSpacing: -0.5,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'SPEND MODE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[600],
-                          letterSpacing: 2,
-                        ),
-                      ),
                     ],
                   ),
-                  // Coin Badge
+                  // Coin Badge with orange accent
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFF27272A),
                       border: Border.all(
-                        color: const Color(0xFFfb923c).withOpacity(0.2),
+                        color: Colors.white.withAlpha(25),
                         width: 1,
                       ),
                       borderRadius: BorderRadius.circular(100),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFfb923c).withOpacity(0.1),
-                          blurRadius: 20,
-                          spreadRadius: -5,
-                        ),
-                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('🪙', style: TextStyle(fontSize: 20)),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.monetization_on, color: Color(0xFFfb923c), size: 18),
+                        const SizedBox(width: 6),
                         Text(
                           provider.coinBalance.toStringAsFixed(0),
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFfb923c),
+                            color: Colors.white,
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -1757,8 +2084,42 @@ class MarketPage extends StatelessWidget {
               child: provider.rewardTasks.isEmpty
                   ? _buildEmptyState()
                   : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
                       children: [
+                        // Featured Section (if rewards exist, show first one as featured)
+                        if (provider.rewardTasks.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Featured',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[500],
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildFeaturedCard(context, provider.rewardTasks.first, provider),
+                          const SizedBox(height: 32),
+                        ],
+                        
+                        // Category Filters
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildCategoryChip('All Items', true),
+                              const SizedBox(width: 12),
+                              _buildCategoryChip('Boosters', false),
+                              const SizedBox(width: 12),
+                              _buildCategoryChip('Cosmetics', false),
+                              const SizedBox(width: 12),
+                              _buildCategoryChip('Audio', false),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
                         // Rewards Grid
                         GridView.builder(
                           shrinkWrap: true,
@@ -1767,7 +2128,7 @@ class MarketPage extends StatelessWidget {
                             crossAxisCount: 2,
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 16,
-                            childAspectRatio: 0.75,
+                            childAspectRatio: 0.85,
                           ),
                           itemCount: provider.rewardTasks.length,
                           itemBuilder: (context, index) {
@@ -1775,13 +2136,174 @@ class MarketPage extends StatelessWidget {
                             return _buildRewardCard(context, task, provider);
                           },
                         ),
-                        
-                        const SizedBox(height: 32),
-                        
-                        // Custom Reward Card
-                        _buildCustomRewardCard(context),
                       ],
                     ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: Container(
+        margin: const EdgeInsets.only(bottom: 70),
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddRewardDialog(context),
+          backgroundColor: const Color(0xFFfb923c),
+          icon: const Icon(Icons.add, color: Colors.black),
+          label: const Text(
+            'Add Reward',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String label, bool isSelected) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFfb923c) : const Color(0xFF27272A),
+        border: Border.all(
+          color: isSelected ? Colors.transparent : Colors.white.withAlpha(25),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.black : Colors.grey[400],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeaturedCard(BuildContext context, RewardTask task, AppProvider provider) {
+    return InkWell(
+      onTap: () async {
+        final success = await provider.purchaseReward(task.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                success ? '🎉 ${task.name} satın alındı!' : '❌ Yetersiz coin!',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              backgroundColor: success ? const Color(0xFF25F425) : Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: const Color(0xFF27272A),
+          border: Border.all(color: Colors.white.withAlpha(25)),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFfb923c).withAlpha(30),
+              blurRadius: 20,
+              spreadRadius: -5,
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Background icon
+            Positioned(
+              right: 20,
+              top: 20,
+              child: Icon(
+                Icons.palette,
+                size: 100,
+                color: Colors.white.withAlpha(10),
+              ),
+            ),
+            // Gradient overlay
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFFfb923c).withAlpha(20),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFfb923c),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'HOT',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    task.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Exclusive reward',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${task.coinCost.toStringAsFixed(0)} C',
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -2779,6 +3301,542 @@ class TransactionCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// PROFILE SELECTION SCREEN
+// ============================================================================
+
+class ProfileSelectionScreen extends StatelessWidget {
+  const ProfileSelectionScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<AppProvider>(context);
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0A0A14), Color(0xFF1A1A2E), Color(0xFF0A0A14)],
+          ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Background glow effects
+              Positioned(
+                top: -100,
+                left: -100,
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF25F425).withAlpha(30),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: -100,
+                right: -100,
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF25F425).withAlpha(20),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // App Logo
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF27272A),
+                        border: Border.all(
+                          color: const Color(0xFF25F425).withAlpha(50),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF25F425).withAlpha(80),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.access_time_filled,
+                        size: 48,
+                        color: Color(0xFF25F425),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    const Text('Who is focusing?', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5)),
+                    const SizedBox(height: 8),
+                    const Text('Select a profile to continue', style: TextStyle(fontSize: 16, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 48),
+                    if (provider.profiles.isEmpty)
+                      _buildEmptyState(context)
+                    else
+                      Flexible(
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const BouncingScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.85,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                          ),
+                          itemCount: provider.profiles.length,
+                          itemBuilder: (context, index) {
+                            final profile = provider.profiles[index];
+                            final isActive = profile.id == provider.currentUserId;
+                            return _buildProfileCard(context, profile, isActive, provider);
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+                    InkWell(
+                      onTap: () => _showAddProfileDialog(context),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white.withAlpha(25), width: 2),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(color: const Color(0xFF27272A), borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(Icons.add, color: Color(0xFF25F425), size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text('Add User', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: const Color(0xFF27272A).withAlpha(128),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withAlpha(25)),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.people_outline, size: 64, color: Colors.white.withAlpha(128)),
+              const SizedBox(height: 16),
+              const Text('No profiles yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white70)),
+              const SizedBox(height: 8),
+              Text('Create your first profile to get started', style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(128)), textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileCard(BuildContext context, UserProfile profile, bool isActive, AppProvider provider) {
+    return InkWell(
+      onTap: () async {
+        await provider.switchUser(profile.id);
+        if (context.mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+        }
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF27272A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isActive ? const Color(0xFF25F425).withAlpha(128) : Colors.white.withAlpha(25), width: 2),
+          boxShadow: isActive ? [BoxShadow(color: const Color(0xFF25F425).withAlpha(50), blurRadius: 20, spreadRadius: 2)] : [],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF18181B),
+                    border: Border.all(color: profile.avatarColor.withAlpha(128), width: 2),
+                  ),
+                  child: Icon(_getIconData(profile.avatarIcon), size: 40, color: profile.avatarColor),
+                ),
+                if (isActive)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Color(0xFF27272A), shape: BoxShape.circle),
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF25F425),
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: const Color(0xFF25F425).withAlpha(200), blurRadius: 8, spreadRadius: 2)],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(profile.name, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text('Lvl ${profile.level}', style: TextStyle(color: Colors.white.withAlpha(128), fontSize: 12, fontFamily: 'monospace')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'person': return Icons.person;
+      case 'face': return Icons.face;
+      case 'face_3': return Icons.face_3;
+      case 'work': return Icons.work;
+      case 'school': return Icons.school;
+      case 'sports_esports': return Icons.sports_esports;
+      case 'palette': return Icons.palette;
+      case 'code': return Icons.code;
+      default: return Icons.person;
+    }
+  }
+
+  void _showAddProfileDialog(BuildContext context) {
+    showDialog(context: context, builder: (context) => const AddProfileDialog());
+  }
+}
+
+// ============================================================================
+// ADD PROFILE DIALOG
+// ============================================================================
+
+class AddProfileDialog extends StatefulWidget {
+  const AddProfileDialog({super.key});
+
+  @override
+  State<AddProfileDialog> createState() => _AddProfileDialogState();
+}
+
+class _AddProfileDialogState extends State<AddProfileDialog> {
+  final _nameController = TextEditingController();
+  String _selectedIcon = 'person';
+  Color _selectedColor = const Color(0xFF4CAF50);
+
+  final List<String> _availableIcons = ['person', 'face', 'face_3', 'work', 'school', 'sports_esports', 'palette', 'code'];
+  final List<Color> _availableColors = [
+    const Color(0xFF4CAF50),
+    const Color(0xFF9C27B0),
+    const Color(0xFF2196F3),
+    const Color(0xFFFF9800),
+    const Color(0xFFE91E63),
+    const Color(0xFF00BCD4),
+    const Color(0xFFFFEB3B),
+    const Color(0xFFFF5722),
+  ];
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF27272A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Create Profile', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                filled: true,
+                fillColor: const Color(0xFF18181B),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF25F425), width: 2)),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 24),
+            const Text('Choose Avatar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF))),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _availableIcons.map((icon) {
+                final isSelected = icon == _selectedIcon;
+                return InkWell(
+                  onTap: () => setState(() => _selectedIcon = icon),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: isSelected ? _selectedColor.withAlpha(50) : const Color(0xFF18181B),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isSelected ? _selectedColor : Colors.transparent, width: 2),
+                    ),
+                    child: Icon(_getIconData(icon), color: isSelected ? _selectedColor : Colors.white54, size: 28),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+            const Text('Choose Color', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF))),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _availableColors.map((color) {
+                final isSelected = color == _selectedColor;
+                return InkWell(
+                  onTap: () => setState(() => _selectedColor = color),
+                  borderRadius: BorderRadius.circular(50),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 3)),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Color(0xFF9CA3AF)))),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _createProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF25F425),
+                    foregroundColor: const Color(0xFF18181B),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'person': return Icons.person;
+      case 'face': return Icons.face;
+      case 'face_3': return Icons.face_3;
+      case 'work': return Icons.work;
+      case 'school': return Icons.school;
+      case 'sports_esports': return Icons.sports_esports;
+      case 'palette': return Icons.palette;
+      case 'code': return Icons.code;
+      default: return Icons.person;
+    }
+  }
+
+  Future<void> _createProfile() async {
+    if (_nameController.text.trim().isEmpty) return;
+
+    final provider = Provider.of<AppProvider>(context, listen: false);
+    final profile = await provider.addProfile(
+      name: _nameController.text.trim(),
+      avatarIcon: _selectedIcon,
+      avatarColor: _selectedColor,
+    );
+
+    await provider.switchUser(profile.id);
+
+    if (mounted) {
+      Navigator.pop(context);
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+    }
+  }
+}
+
+// ============================================================================
+// SETTINGS PAGE
+// ============================================================================
+
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF18181B),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              const Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              _buildSettingItem(
+                context,
+                Icons.person,
+                'Profile',
+                'Manage your profile',
+                () {},
+              ),
+              _buildSettingItem(
+                context,
+                Icons.notifications,
+                'Notifications',
+                'Configure notifications',
+                () {},
+              ),
+              _buildSettingItem(
+                context,
+                Icons.palette,
+                'Theme',
+                'Customize appearance',
+                () {},
+              ),
+              _buildSettingItem(
+                context,
+                Icons.info,
+                'About',
+                'App information',
+                () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingItem(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF27272A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withAlpha(25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFfb923c).withAlpha(30),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: const Color(0xFFfb923c), size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey[600], size: 20),
+          ],
+        ),
       ),
     );
   }
