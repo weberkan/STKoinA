@@ -19,7 +19,7 @@ class WorkTask {
   final String id;
   final String name;
   final DateTime createdAt;
-  final int coinsPerMinute; // Dakika başına coin
+  final double coinsPerMinute; // Dakika başına coin
   bool isRunning;
   DateTime? startTime;
   int totalSeconds;
@@ -28,7 +28,7 @@ class WorkTask {
     required this.id,
     required this.name,
     required this.createdAt,
-    this.coinsPerMinute = 1,
+    this.coinsPerMinute = 1.0,
     this.isRunning = false,
     this.startTime,
     this.totalSeconds = 0,
@@ -48,7 +48,7 @@ class WorkTask {
         id: json['id'],
         name: json['name'],
         createdAt: DateTime.parse(json['createdAt']),
-        coinsPerMinute: json['coinsPerMinute'] ?? 1,
+        coinsPerMinute: (json['coinsPerMinute'] ?? 1).toDouble(),
         isRunning: json['isRunning'] ?? false,
         startTime:
             json['startTime'] != null ? DateTime.parse(json['startTime']) : null,
@@ -59,7 +59,7 @@ class WorkTask {
 class RewardTask {
   final String id;
   final String name;
-  final int coinCost;
+  final double coinCost;
   final DateTime createdAt;
 
   RewardTask({
@@ -79,7 +79,7 @@ class RewardTask {
   factory RewardTask.fromJson(Map<String, dynamic> json) => RewardTask(
         id: json['id'],
         name: json['name'],
-        coinCost: json['coinCost'],
+        coinCost: (json['coinCost']).toDouble(),
         createdAt: DateTime.parse(json['createdAt']),
       );
 }
@@ -87,7 +87,7 @@ class RewardTask {
 class Transaction {
   final String id;
   final String description;
-  final int amount;
+  final double amount;
   final DateTime date;
   final TransactionType type;
 
@@ -110,7 +110,7 @@ class Transaction {
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
         id: json['id'],
         description: json['description'],
-        amount: json['amount'],
+        amount: (json['amount']).toDouble(),
         date: DateTime.parse(json['date']),
         type: TransactionType.values.byName(json['type']),
       );
@@ -395,14 +395,14 @@ class StorageService {
   }
 
   // Balance
-  Future<int> loadBalance() async {
+  Future<double> loadBalance() async {
     final prefs = await _prefs;
-    return prefs.getInt(_balanceKey) ?? 0;
+    return prefs.getDouble(_balanceKey) ?? 0.0;
   }
 
-  Future<void> saveBalance(int balance) async {
+  Future<void> saveBalance(double balance) async {
     final prefs = await _prefs;
-    await prefs.setInt(_balanceKey, balance);
+    await prefs.setDouble(_balanceKey, balance);
   }
 }
 
@@ -417,7 +417,7 @@ class AppProvider extends ChangeNotifier {
   List<WorkTask> _workTasks = [];
   List<RewardTask> _rewardTasks = [];
   List<Transaction> _transactions = [];
-  int _coinBalance = 0;
+  double _coinBalance = 0.0;
   bool _isLoading = true;
 
   Timer? _timer;
@@ -425,7 +425,7 @@ class AppProvider extends ChangeNotifier {
   List<WorkTask> get workTasks => _workTasks;
   List<RewardTask> get rewardTasks => _rewardTasks;
   List<Transaction> get transactions => _transactions;
-  int get coinBalance => _coinBalance;
+  double get coinBalance => _coinBalance;
   bool get isLoading => _isLoading;
 
   AppProvider() {
@@ -468,7 +468,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   // Work Task Methods
-  Future<void> addWorkTask(String name, int coinsPerMinute) async {
+  Future<void> addWorkTask(String name, double coinsPerMinute) async {
     final task = WorkTask(
       id: _uuid.v4(),
       name: name,
@@ -504,20 +504,17 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<int> stopWorkTask(String id) async {
+  Future<double> stopWorkTask(String id) async {
     final task = _workTasks.firstWhere((t) => t.id == id);
-    if (!task.isRunning || task.startTime == null) return 0;
+    if (!task.isRunning || task.startTime == null) return 0.0;
 
     final elapsed = DateTime.now().difference(task.startTime!).inSeconds;
     task.totalSeconds += elapsed;
     task.isRunning = false;
     task.startTime = null;
 
-    // Calculate coins based on custom rate
-    int earnedCoins = (elapsed ~/ 60) * task.coinsPerMinute;
-    if (earnedCoins == 0 && elapsed >= 30) {
-      earnedCoins = task.coinsPerMinute; // Minimum 30 saniye = 1 tur coin
-    }
+    // Hassas coin hesaplama: dakikada başına coin * (saniye / 60)
+    double earnedCoins = task.coinsPerMinute * (elapsed / 60.0);
 
     if (earnedCoins > 0) {
       _coinBalance += earnedCoins;
@@ -559,7 +556,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   // Reward Task Methods
-  Future<void> addRewardTask(String name, int cost) async {
+  Future<void> addRewardTask(String name, double cost) async {
     final task = RewardTask(
       id: _uuid.v4(),
       name: name,
@@ -624,30 +621,43 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TimeMint',
+      title: 'Focus',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6B4EE6),
-          brightness: Brightness.dark,
-        ),
-        textTheme: GoogleFonts.poppinsTextTheme(
+        brightness: Brightness.dark,
+        primaryColor: const Color(0xFF25F425), // Neon green
+        scaffoldBackgroundColor: const Color(0xFF18181B), // Very dark gray
+        cardColor: const Color(0xFF27272A), // Dark gray surface
+        textTheme: GoogleFonts.interTextTheme(
           ThemeData.dark().textTheme,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0A0A14),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF25F425),
+          secondary: Color(0xFF25F425),
+          surface: Color(0xFF27272A),
+          background: Color(0xFF18181B),
+          onPrimary: Color(0xFF18181B),
+          onSecondary: Color(0xFF18181B),
+          onSurface: Colors.white,
+          onBackground: Colors.white,
+        ),
         cardTheme: const CardThemeData(
-          color: Color(0xFF1A1A2E),
-          elevation: 8,
+          color: Color(0xFF27272A),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFFFFD700),
-          foregroundColor: Color(0xFF1A1A2E),
+          backgroundColor: Color(0xFF25F425),
+          foregroundColor: Color(0xFF18181B),
+          elevation: 0,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Color(0xFF18181B),
           elevation: 0,
-          centerTitle: true,
+          centerTitle: false,
         ),
       ),
       localizationsDelegates: const [
@@ -1006,120 +1016,376 @@ class EarningPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    final runningTask = provider.workTasks.firstWhere(
+      (t) => t.isRunning,
+      orElse: () => WorkTask(id: '', name: '', createdAt: DateTime.now()),
+    );
+    final hasRunningTask = runningTask.id.isNotEmpty;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A0A2E), Color(0xFF0A0A14)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header: Coin Sol, Profil Sağ
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Sol: Coin Balance
-                    Row(
+      backgroundColor: const Color(0xFF18181B),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF18181B),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withOpacity(0.05),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Focus',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'EARN MODE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Coin Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF27272A),
+                      border: Border.all(
+                        color: const Color(0xFF25F425).withOpacity(0.2),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(100),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF25F425).withOpacity(0.1),
+                          blurRadius: 20,
+                          spreadRadius: -5,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const CoinWidget(size: 44),
-                        const SizedBox(width: 12),
+                        const Text('🪙', style: TextStyle(fontSize: 20)),
+                        const SizedBox(width: 8),
                         Text(
-                          '${provider.coinBalance}',
+                          provider.coinBalance.toStringAsFixed(0),
                           style: const TextStyle(
-                            fontSize: 32,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFFD700),
+                            color: Color(0xFF25F425),
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
-                    // Sağ: Profil Icon
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6B4EE6), Color(0xFF9D4EDD)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF6B4EE6).withAlpha(100),
-                            blurRadius: 15,
-                            spreadRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
+                children: [
+                  // In Progress Section
+                  if (hasRunningTask) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF25F425),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'IN PROGRESS',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF25F425),
+                              letterSpacing: 2,
+                            ),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.person, color: Colors.white, size: 24),
                     ),
+                    const SizedBox(height: 16),
+                    _buildRunningTaskCard(context, runningTask, provider),
+                    const SizedBox(height: 32),
                   ],
-                ),
-              ),
-              // Title
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Çalışma Görevleri',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                  
+                  // Your Tasks Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Your Tasks',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            'VIEW ALL',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF25F425),
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Zamanlayıcıyı başlat ve coin kazan!',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Task List
+                  if (provider.workTasks.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ...provider.workTasks
+                        .where((t) => !t.isRunning)
+                        .map((task) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: WorkTaskCard(task: task),
+                            )),
+                ],
               ),
-              const SizedBox(height: 16),
-              // Task List
-              Expanded(
-                child: provider.workTasks.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: provider.workTasks.length,
-                        itemBuilder: (context, index) {
-                          final task = provider.workTasks[index];
-                          return WorkTaskCard(task: task);
-                        },
-                      ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: Container(
+        width: 56,
+        height: 56,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFFD700).withAlpha(100),
-              blurRadius: 15,
-              spreadRadius: 2,
+              color: const Color(0xFF25F425).withOpacity(0.4),
+              blurRadius: 20,
+              spreadRadius: 0,
             ),
           ],
         ),
-        child: FloatingActionButton.extended(
+        child: FloatingActionButton(
           onPressed: () => _showAddTaskDialog(context),
-          icon: const Icon(Icons.add),
-          label: const Text('Görev Ekle', style: TextStyle(fontWeight: FontWeight.bold)),
+          child: const Icon(Icons.add, size: 28),
         ),
       ),
     );
+  }
+
+  Widget _buildRunningTaskCard(BuildContext context, WorkTask task, AppProvider provider) {
+    final currentSeconds = task.totalSeconds + provider.getElapsedSeconds(task);
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF27272A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF25F425),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF25F425).withOpacity(0.3),
+            blurRadius: 15,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25F425).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.code,
+                        color: Color(0xFF25F425),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '+${task.coinsPerMinute.toStringAsFixed(1)} coins/min',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF25F425).withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25F425).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.sync,
+                        color: Color(0xFF25F425),
+                        size: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Session Duration',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _formatTime(currentSeconds),
+                          style: const TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        final earned = await provider.stopWorkTask(task.id);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.monetization_on, color: Color(0xFF25F425)),
+                                  const SizedBox(width: 8),
+                                  Text('+${earned.toStringAsFixed(2)} Coin kazandın! 🎉'),
+                                ],
+                              ),
+                              backgroundColor: const Color(0xFF27272A),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.stop_circle, size: 20),
+                      label: const Text('Stop'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.1),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Progress bar
+          Container(
+            height: 4,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: (currentSeconds % 60) / 60,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF25F425),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
   Widget _buildEmptyState() {
@@ -1147,16 +1413,16 @@ class EarningPage extends StatelessWidget {
 
   void _showAddTaskDialog(BuildContext context) {
     final nameController = TextEditingController();
-    final coinController = TextEditingController(text: '1');
+    final coinController = TextEditingController(text: '1.0');
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF27272A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.add_task, color: Color(0xFFFFD700)),
+            Icon(Icons.add_task, color: Color(0xFF25F425)),
             SizedBox(width: 12),
             Text('Yeni Çalışma Görevi'),
           ],
@@ -1182,11 +1448,11 @@ class EarningPage extends StatelessWidget {
             const SizedBox(height: 16),
             TextField(
               controller: coinController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 hintText: 'Örn: 2',
                 labelText: 'Dakika Başına Coin',
-                prefixIcon: const Icon(Icons.monetization_on, color: Color(0xFFFFD700)),
+                prefixIcon: const Icon(Icons.monetization_on, color: Color(0xFF25F425)),
                 filled: true,
                 fillColor: const Color(0xFF0D0D1A),
                 border: OutlineInputBorder(
@@ -1207,7 +1473,7 @@ class EarningPage extends StatelessWidget {
           FilledButton(
             onPressed: () {
               final name = nameController.text.trim();
-              final coins = int.tryParse(coinController.text.trim()) ?? 1;
+              final coins = double.tryParse(coinController.text.trim()) ?? 1.0;
               if (name.isNotEmpty && coins > 0) {
                 context.read<AppProvider>().addWorkTask(name, coins);
                 Navigator.pop(context);
@@ -1239,208 +1505,106 @@ class WorkTaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final currentSeconds = task.isRunning
-        ? task.totalSeconds + provider.getElapsedSeconds(task)
-        : task.totalSeconds;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // Glassmorphism effect
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: task.isRunning
-              ? [Colors.white.withAlpha(25), Colors.white.withAlpha(10)]
-              : [Colors.white.withAlpha(15), Colors.white.withAlpha(5)],
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF27272A),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: task.isRunning
-              ? const Color(0xFFFFD700).withAlpha(100)
-              : Colors.white.withAlpha(30),
-          width: task.isRunning ? 2 : 1,
+          color: Colors.white.withOpacity(0.05),
+          width: 1,
         ),
-        boxShadow: [
-          if (task.isRunning)
-            BoxShadow(
-              color: const Color(0xFFFFD700).withAlpha(50),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
-        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF18181B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.05),
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              Icons.menu_book,
+              color: Colors.grey[600],
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 3D Task Icon
-                Icon3D(
-                  icon: Icons.timer,
-                  size: 44,
-                  primaryColor: task.isRunning ? const Color(0xFFFFD700) : const Color(0xFF6B4EE6),
-                  secondaryColor: task.isRunning ? const Color(0xFFFF8C00) : const Color(0xFF9D4EDD),
-                  withGlow: task.isRunning,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.monetization_on, size: 14, color: Color(0xFFFFD700)),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${task.coinsPerMinute} coin/dk',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFFFFD700),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                Text(
+                  task.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                // Menü butonu (Sil / Sıfırla)
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: Colors.grey[400]),
-                  color: const Color(0xFF1A1A2E),
-                  onSelected: (value) {
-                    if (value == 'delete') {
-                      _showDeleteConfirmation(context, provider);
-                    } else if (value == 'reset') {
-                      provider.resetWorkTask(task.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Row(
-                            children: [
-                              Icon(Icons.refresh, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text('Süre sıfırlandı'),
-                            ],
-                          ),
-                          backgroundColor: const Color(0xFF6B4EE6),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'reset',
-                      child: Row(
-                        children: [
-                          Icon(Icons.refresh, color: Color(0xFFFFD700)),
-                          SizedBox(width: 12),
-                          Text('Süreyi Sıfırla'),
-                        ],
-                      ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.bolt,
+                      size: 14,
+                      color: Color(0xFF25F425),
                     ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, color: Colors.red),
-                          SizedBox(width: 12),
-                          Text('Görevi Sil', style: TextStyle(color: Colors.red)),
-                        ],
+                    const SizedBox(width: 4),
+                    Text(
+                      '+${task.coinsPerMinute.toStringAsFixed(1)} coins/min',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF25F425),
                       ),
                     ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  Icons.timer,
-                  size: 20,
-                  color: task.isRunning
-                      ? const Color(0xFFFFD700)
-                      : Colors.grey[500],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _formatTime(currentSeconds),
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
-                    color: task.isRunning
-                        ? const Color(0xFFFFD700)
-                        : Colors.grey[400],
-                  ),
-                ),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: () async {
-                    if (task.isRunning) {
-                      final earned = await provider.stopWorkTask(task.id);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                const Icon(Icons.monetization_on,
-                                    color: Color(0xFFFFD700)),
-                                const SizedBox(width: 8),
-                                Text(earned > 0
-                                    ? '+$earned Coin kazandın! 🎉'
-                                    : 'En az 30 saniye çalışmalısın!'),
-                              ],
-                            ),
-                            backgroundColor: earned > 0
-                                ? const Color(0xFF2E7D32)
-                                : const Color(0xFFE65100),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      }
-                    } else {
-                      provider.startWorkTask(task.id);
-                    }
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: task.isRunning
-                        ? const Color(0xFFE53935)
-                        : const Color(0xFF4CAF50),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                  icon: Icon(task.isRunning ? Icons.stop : Icons.play_arrow),
-                  label: Text(
-                    task.isRunning ? 'Bitir' : 'Başlat',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+          ),
+          const SizedBox(width: 12),
+          // Start Button
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF25F425).withOpacity(0.4),
+                  blurRadius: 10,
+                  spreadRadius: 0,
                 ),
               ],
             ),
-          ],
-        ),
+            child: FilledButton(
+              onPressed: () {
+                provider.startWorkTask(task.id);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF25F425),
+                foregroundColor: const Color(0xFF18181B),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              child: const Text('Start'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1449,7 +1613,7 @@ class WorkTaskCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF27272A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
@@ -1458,7 +1622,7 @@ class WorkTaskCard extends StatelessWidget {
             Text('Görevi Sil'),
           ],
         ),
-        content: Text('"${task.name}" görevini silmek istediğinize emin misiniz?'),
+        content: Text('"${task.name}" görevi silmek istediğinize emin misiniz?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1506,138 +1670,363 @@ class MarketPage extends StatelessWidget {
     final provider = context.watch<AppProvider>();
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A0A2E), Color(0xFF0A0A14)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header: Coin Sol, Profil Sağ (same as EarningPage)
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Sol: Coin Balance
-                    Row(
+      backgroundColor: const Color(0xFF18181B),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF18181B),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withOpacity(0.05),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Market',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SPEND MODE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Coin Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF27272A),
+                      border: Border.all(
+                        color: const Color(0xFFfb923c).withOpacity(0.2),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(100),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFfb923c).withOpacity(0.1),
+                          blurRadius: 20,
+                          spreadRadius: -5,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const CoinWidget(size: 44),
-                        const SizedBox(width: 12),
+                        const Text('🪙', style: TextStyle(fontSize: 20)),
+                        const SizedBox(width: 8),
                         Text(
-                          '${provider.coinBalance}',
+                          provider.coinBalance.toStringAsFixed(0),
                           style: const TextStyle(
-                            fontSize: 32,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFFD700),
+                            color: Color(0xFFfb923c),
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
-                    // Sağ: Profil Icon
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6B4EE6), Color(0xFF9D4EDD)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF6B4EE6).withAlpha(100),
-                            blurRadius: 15,
-                            spreadRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Expanded(
+              child: provider.rewardTasks.isEmpty
+                  ? _buildEmptyState()
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
+                      children: [
+                        // Rewards Grid
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.75,
                           ),
-                        ],
-                      ),
-                      child: const Icon(Icons.person, color: Colors.white, size: 24),
-                    ),
-                  ],
-                ),
-              ),
-              // Title
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Ödül Marketi',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Coinlerini harcayarak ödüllerini al!',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: provider.rewardTasks.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1A1A2E),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Icon(
-                                Icons.card_giftcard,
-                                size: 60,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            Text(
-                              'Henüz ödül yok',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '+ butonuyla yeni ödül ekle',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+                          itemCount: provider.rewardTasks.length,
+                          itemBuilder: (context, index) {
+                            final task = provider.rewardTasks[index];
+                            return _buildRewardCard(context, task, provider);
+                          },
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: provider.rewardTasks.length,
-                        itemBuilder: (context, index) {
-                          final task = provider.rewardTasks[index];
-                          return RewardTaskCard(task: task);
-                        },
-                      ),
+                        
+                        const SizedBox(height: 32),
+                        
+                        // Custom Reward Card
+                        _buildCustomRewardCard(context),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRewardCard(BuildContext context, RewardTask task, AppProvider provider) {
+    final canAfford = provider.coinBalance >= task.coinCost;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF27272A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.05),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon Container
+          Container(
+            height: 96,
+            decoration: BoxDecoration(
+              color: const Color(0xFF18181B),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Icon(
+                Icons.card_giftcard,
+                size: 48,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Title
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Reward',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Bottom: Cost + Button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text('🪙', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 4),
+                  Text(
+                    task.coinCost.toStringAsFixed(0),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFfb923c),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: canAfford
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFFfb923c).withOpacity(0.3),
+                            blurRadius: 10,
+                            spreadRadius: 0,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: FilledButton(
+                  onPressed: canAfford
+                      ? () async {
+                          final success = await provider.purchaseReward(task.id);
+                          if (context.mounted && success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.celebration, color: Colors.white),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text('${task.name} ödülünü aldın! 🎉')),
+                                  ],
+                                ),
+                                backgroundColor: const Color(0xFFfb923c),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        }
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: canAfford ? const Color(0xFFfb923c) : Colors.grey[800],
+                    foregroundColor: const Color(0xFF18181B),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    textStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    minimumSize: Size.zero,
+                  ),
+                  child: const Text('Buy'),
+                ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomRewardCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFfb923c).withOpacity(0.2),
+            const Color(0xFF27272A),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFfb923c).withOpacity(0.2),
+          width: 1,
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddRewardDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Ödül Ekle', style: TextStyle(fontWeight: FontWeight.bold)),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFFfb923c).withOpacity(0.2),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFfb923c).withOpacity(0.3),
+                  blurRadius: 15,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.redeem,
+              color: Color(0xFFfb923c),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Custom Reward',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Create your own reward.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF27272A),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFFfb923c).withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: IconButton(
+              onPressed: () => _showAddRewardDialog(context),
+              icon: const Icon(
+                Icons.add,
+                color: Color(0xFFfb923c),
+                size: 20,
+              ),
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(10),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withAlpha(20)),
+            ),
+            child: Icon(Icons.card_giftcard, size: 60, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 20),
+          Text('Henüz ödül yok', style: TextStyle(fontSize: 18, color: Colors.grey[500])),
+          const SizedBox(height: 8),
+          Text('Özel ödül oluştur', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+        ],
       ),
     );
   }
@@ -1649,11 +2038,11 @@ class MarketPage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF27272A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.card_giftcard, color: Color(0xFFFFD700)),
+            Icon(Icons.card_giftcard, color: Color(0xFFfb923c)),
             SizedBox(width: 12),
             Text('Yeni Ödül'),
           ],
@@ -1679,12 +2068,11 @@ class MarketPage extends StatelessWidget {
             const SizedBox(height: 16),
             TextField(
               controller: costController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                hintText: 'Örn: 60',
-                labelText: 'Coin Bedeli',
-                prefixIcon: const Icon(Icons.monetization_on,
-                    color: Color(0xFFFFD700)),
+                hintText: 'Örn: 100',
+                labelText: 'Maliyet (Coin)',
+                prefixIcon: const Icon(Icons.monetization_on, color: Color(0xFFfb923c)),
                 filled: true,
                 fillColor: const Color(0xFF0D0D1A),
                 border: OutlineInputBorder(
@@ -1703,14 +2091,15 @@ class MarketPage extends StatelessWidget {
           FilledButton(
             onPressed: () {
               final name = nameController.text.trim();
-              final cost = int.tryParse(costController.text.trim()) ?? 0;
+              final cost = double.tryParse(costController.text.trim()) ?? 0.0;
               if (name.isNotEmpty && cost > 0) {
                 context.read<AppProvider>().addRewardTask(name, cost);
                 Navigator.pop(context);
               }
             },
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF6B4EE6),
+              backgroundColor: const Color(0xFFfb923c),
+              foregroundColor: const Color(0xFF18181B),
             ),
             child: const Text('Ekle'),
           ),
@@ -1719,7 +2108,6 @@ class MarketPage extends StatelessWidget {
     );
   }
 }
-
 class RewardTaskCard extends StatelessWidget {
   final RewardTask task;
 
@@ -1779,8 +2167,8 @@ class RewardTaskCard extends StatelessWidget {
                       children: [
                         const CoinWidget(size: 18, withGlow: false),
                         const SizedBox(width: 6),
-                        Text(
-                          '${task.coinCost}',
+                      Text(
+                          '${task.coinCost.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -1828,7 +2216,7 @@ class RewardTaskCard extends StatelessWidget {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                    'Yetersiz bakiye! ${task.coinCost - provider.coinBalance} coin daha lazım.'),
+                                    'Yetersiz bakiye! ${(task.coinCost - provider.coinBalance).toStringAsFixed(2)} coin daha lazım.'),
                               ),
                             ],
                           ),
@@ -1918,348 +2306,402 @@ class WalletPage extends StatefulWidget {
 }
 
 class _WalletPageState extends State<WalletPage> {
-  String _dateFilter = 'Tümü';
-  DateTime? _selectedDate;
-  final List<String> _filterOptions = ['Tümü', 'Bugün', 'Bu Hafta', 'Bu Ay', 'Tarih Seç'];
-
-  Future<void> _pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      helpText: 'TARİH SEÇ',
-      cancelText: 'İPTAL',
-      confirmText: 'TAMAM',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF6B4EE6),
-              surface: Color(0xFF1A1A2E),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-        _dateFilter = 'Tarih Seç';
-      });
-    }
-  }
-
-  List<Transaction> _filterTransactions(List<Transaction> transactions) {
-    final now = DateTime.now();
-    switch (_dateFilter) {
-      case 'Bugün':
-        return transactions.where((t) =>
-          t.date.year == now.year &&
-          t.date.month == now.month &&
-          t.date.day == now.day
-        ).toList();
-      case 'Bu Hafta':
-        final weekStart = now.subtract(Duration(days: now.weekday - 1));
-        return transactions.where((t) => t.date.isAfter(weekStart)).toList();
-      case 'Bu Ay':
-        return transactions.where((t) =>
-          t.date.year == now.year && t.date.month == now.month
-        ).toList();
-      case 'Tarih Seç':
-        if (_selectedDate != null) {
-          return transactions.where((t) =>
-            t.date.year == _selectedDate!.year &&
-            t.date.month == _selectedDate!.month &&
-            t.date.day == _selectedDate!.day
-          ).toList();
-        }
-        return transactions;
-      default:
-        return transactions;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final filteredTransactions = _filterTransactions(provider.transactions);
+    
+    // Group transactions by date
+    final Map<String, List<Transaction>> groupedTransactions = {};
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    
+    for (final transaction in provider.transactions) {
+      final txDate = DateTime(transaction.date.year, transaction.date.month, transaction.date.day);
+      String key;
+      if (txDate == today) {
+        key = 'TODAY';
+      } else if (txDate == yesterday) {
+        key = 'YESTERDAY';
+      } else if (txDate.isAfter(today.subtract(const Duration(days: 7)))) {
+        key = 'LAST WEEK';
+      } else {
+        key = DateFormat('MMMM yyyy', 'tr_TR').format(transaction.date).toUpperCase();
+      }
+      groupedTransactions.putIfAbsent(key, () => []);
+      groupedTransactions[key]!.add(transaction);
+    }
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A0A2E), Color(0xFF0A0A14)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Balance Header with 3D Coin
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.all(20),
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF6B4EE6),
-                      Color(0xFF9D4EDD),
-                      Color(0xFFE040FB),
+      backgroundColor: const Color(0xFF18181B),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF18181B),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withOpacity(0.05),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Wallet',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'BALANCE & HISTORY',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          letterSpacing: 2,
+                        ),
+                      ),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6B4EE6).withAlpha(100),
-                      blurRadius: 25,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Toplam Bakiye',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
+                  // Notification Button
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF27272A),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.05),
+                        width: 1,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Icon(
+                      Icons.notifications_outlined,
+                      color: Colors.grey[500],
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
+                children: [
+                  // Balance Card
+                  _buildBalanceCard(provider),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Transaction History Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const CoinWidget(size: 50, withGlow: false),
-                        const SizedBox(width: 12),
-                        Text(
-                          '${provider.coinBalance}',
-                          style: const TextStyle(
-                            fontSize: 52,
+                        const Text(
+                          'Transaction History',
+                          style: TextStyle(
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
+                        TextButton(
+                          onPressed: () {},
+                          child: const Row(
+                            children: [
+                              Text(
+                                'FILTER',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF25F425),
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(
+                                Icons.filter_list,
+                                color: Color(0xFF25F425),
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD700).withAlpha(40),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'TIMEMINT',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFFFD700),
-                          letterSpacing: 4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Stats Row
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        'Toplam Kazanç',
-                        provider.transactions
-                            .where((t) => t.type == TransactionType.earning)
-                            .fold(0, (sum, t) => sum + t.amount),
-                        Icons.trending_up,
-                        Colors.green,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Toplam Harcama',
-                        provider.transactions
-                            .where((t) => t.type == TransactionType.spending)
-                            .fold(0, (sum, t) => sum + t.amount.abs()),
-                        Icons.trending_down,
-                        Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Transactions Header with Filter
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Hesap Özeti',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const Spacer(),
-                    // Date Filter Dropdown
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFF6B4EE6).withAlpha(60),
-                            const Color(0xFF6B4EE6).withAlpha(30),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF6B4EE6).withAlpha(80)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _dateFilter,
-                          dropdownColor: const Color(0xFF1A1A2E),
-                          icon: const Icon(Icons.filter_list, color: Color(0xFFFFD700), size: 18),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          items: _filterOptions.map((filter) {
-                            return DropdownMenuItem(
-                              value: filter,
-                              child: Text(filter),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value == 'Tarih Seç') {
-                              _pickDate(context);
-                            } else if (value != null) {
-                              setState(() => _dateFilter = value);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Row(
-                  children: [
-                    Text(
-                      '${filteredTransactions.length} işlem',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Transactions List
-              Expanded(
-                child: filteredTransactions.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withAlpha(10),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Icon(
-                                Icons.receipt_long,
-                                size: 50,
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Transaction List
+                  if (provider.transactions.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ...groupedTransactions.entries.map((entry) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 12, top: 8),
+                            child: Text(
+                              entry.key,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.grey[600],
+                                letterSpacing: 1,
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _dateFilter == 'Tümü'
-                                  ? 'Henüz işlem yok'
-                                  : 'Bu dönemde işlem yok',
-                              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: filteredTransactions.length,
-                        itemBuilder: (context, index) {
-                          final transaction = filteredTransactions[index];
-                          return TransactionCard(transaction: transaction);
-                        },
-                      ),
+                          ),
+                          ...entry.value.map((tx) => _buildTransactionItem(tx)),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    }),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatCard(String label, int value, IconData icon, Color color) {
+  Widget _buildBalanceCard(AppProvider provider) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white.withAlpha(15), Colors.white.withAlpha(5)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(20)),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // Glow effect behind coin
+          Stack(
+            alignment: Alignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                width: 120,
+                height: 120,
                 decoration: BoxDecoration(
-                  color: color.withAlpha(40),
-                  borderRadius: BorderRadius.circular(8),
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF25F425).withOpacity(0.15),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
-                child: Icon(icon, color: color, size: 18),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+              // Coin icon
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF27272A),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF25F425).withOpacity(0.2),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF25F425).withOpacity(0.3),
+                      blurRadius: 15,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Text('🪙', style: TextStyle(fontSize: 32)),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // Balance Amount
           Text(
-            '$value',
-            style: TextStyle(
-              fontSize: 26,
+            provider.coinBalance.toStringAsFixed(0),
+            style: const TextStyle(
+              fontSize: 48,
               fontWeight: FontWeight.bold,
-              color: color,
+              color: Colors.white,
+              letterSpacing: -2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Total Coins Available',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Action Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF25F425).withOpacity(0.3),
+                      blurRadius: 15,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+                child: FilledButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.add_circle, size: 18),
+                  label: const Text('Top Up'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF25F425),
+                    foregroundColor: const Color(0xFF18181B),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.redeem, size: 18),
+                label: const Text('Redeem'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionItem(Transaction transaction) {
+    final isEarning = transaction.type == TransactionType.earning;
+    final timeFormat = DateFormat('HH:mm', 'tr_TR');
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF27272A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.05),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isEarning 
+                  ? const Color(0xFF25F425).withOpacity(0.1)
+                  : Colors.white.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isEarning ? Icons.check_circle : Icons.shopping_bag,
+              color: isEarning ? const Color(0xFF25F425) : Colors.grey[400],
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  transaction.description,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${isEarning ? "Focus Session" : "Purchase"} • ${timeFormat.format(transaction.date)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Amount
+          Text(
+            '${isEarning ? "+" : "-"}${transaction.amount.toStringAsFixed(0)}',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+              color: isEarning ? const Color(0xFF25F425) : Colors.white,
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(10),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withAlpha(20)),
+            ),
+            child: Icon(Icons.receipt_long, size: 60, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 20),
+          Text('Henüz işlem yok', style: TextStyle(fontSize: 18, color: Colors.grey[500])),
+          const SizedBox(height: 8),
+          Text('Görev tamamlayarak coin kazan', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+        ],
+      ),
+    );
+  }
 }
-
-
-
 class TransactionCard extends StatelessWidget {
   final Transaction transaction;
 
@@ -2328,7 +2770,7 @@ class TransactionCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              '${isEarning ? '+' : ''}${transaction.amount}',
+              '${isEarning ? '+' : ''}${transaction.amount.toStringAsFixed(2)}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
